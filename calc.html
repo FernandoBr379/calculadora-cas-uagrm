@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora CAS - Análisis Simbólico y Gráfico</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 16px; background-color: #0f172a; color: #fff;
+            display: flex; justify-content: center;
+        }
+        .calculator-card {
+            width: 100%; max-width: 480px; background: #1e293b;
+            border-radius: 16px; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .title { text-align: center; color: #38bdf8; margin: 0 0 16px 0; font-size: 1.2rem; }
+        .display-screen {
+            background: #090d16; border: 1px solid #334155; border-radius: 10px;
+            padding: 16px; min-height: 80px; margin-bottom: 12px;
+            display: flex; align-items: center; justify-content: center; overflow-x: auto;
+        }
+        #plotContainer {
+            width: 100%; height: 240px; background: #090d16;
+            border: 1px solid #334155; border-radius: 10px; margin-bottom: 12px;
+        }
+        input[type="text"] {
+            width: 100%; padding: 10px 12px; font-size: 1rem; border-radius: 8px;
+            border: 1px solid #475569; background: #0f172a; color: #fff; outline: none; margin-bottom: 10px;
+        }
+        .limit-row {
+            display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
+        }
+        .limit-row label { font-size: 0.85rem; color: #94a3b8; }
+        .limit-row input { margin-bottom: 0; width: 80px; }
+        .grid-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        button {
+            padding: 10px; font-size: 0.88rem; font-weight: 600; border: none;
+            border-radius: 8px; background: #0284c7; color: #fff; cursor: pointer;
+        }
+        button:hover { background: #0369a1; }
+        button.btn-plot { background: #10b981; grid-column: span 2; }
+        button.btn-plot:hover { background: #059669; }
+    </style>
+</head>
+<body>
+
+<div class="calculator-card">
+    <h2 class="title">Calculadora CAS - Cálculo I</h2>
+    
+    <div class="display-screen" id="mathOut">
+        <span style="color: #64748b;">Resultado en LaTeX</span>
+    </div>
+
+    <div id="plotContainer"></div>
+
+    <input type="text" id="mathIn" placeholder="Expresión matemática (ej: (x^2-1)/(x-1))" value="(x^2 - 1)/(x - 1)">
+    
+    <div class="limit-row">
+        <label for="limitPt">Punto límite (x → a):</label>
+        <input type="text" id="limitPt" value="1">
+    </div>
+
+    <!-- BOTONES CON TODAS LAS OPERACIONES REQUERIDAS -->
+    <div class="grid-buttons">
+        <button onclick="procesar('simplify')">✨ Simplificar</button>
+        <button onclick="procesar('limit')">lim (x → a)</button>
+        <button onclick="procesar('diff')">d/dx (Derivar)</button>
+        <button onclick="procesar('integrate')">∫ dx (Integrar)</button>
+        <button onclick="graficar()" class="btn-plot">📊 Graficar 2D</button>
+    </div>
+</div>
+
+<script>
+    async function procesar(operacion) {
+        const input = document.getElementById('mathIn').value;
+        const punto = document.getElementById('limitPt').value;
+        const out = document.getElementById('mathOut');
+        
+        if (!input.trim()) return;
+        out.innerText = "Calculando...";
+
+        try {
+            const res = await fetch('http://127.0.0.1:8000/api/eval', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    expression: input,
+                    variable: 'x',
+                    operation: operacion,
+                    point: punto
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.status === 'ok') {
+                katex.render(data.latex_result, out, { displayMode: true, throwOnError: false });
+            } else {
+                out.innerHTML = `<span style="color: #f87171;">Error: ${data.message}</span>`;
+            }
+        } catch (err) {
+            out.innerHTML = '<span style="color: #f87171;">Error de conexión con el backend</span>';
+        }
+    }
+
+    async function graficar() {
+        const input = document.getElementById('mathIn').value;
+        if (!input.trim()) return;
+
+        try {
+            const res = await fetch('http://127.0.0.1:8000/api/plot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ expression: input, variable: 'x', x_min: -10, x_max: 10 })
+            });
+
+            const data = await res.json();
+
+            if (data.status === 'ok') {
+                const trace = {
+                    x: data.x, y: data.y, type: 'scatter', mode: 'lines',
+                    line: { color: '#38bdf8', width: 2 }
+                };
+                const layout = {
+                    margin: { t: 10, r: 10, l: 30, b: 30 },
+                    paper_bgcolor: '#090d16', plot_bgcolor: '#090d16',
+                    xaxis: { color: '#94a3b8', gridcolor: '#1e293b' },
+                    yaxis: { color: '#94a3b8', gridcolor: '#1e293b' }
+                };
+                Plotly.newPlot('plotContainer', [trace], layout, { responsive: true });
+            }
+        } catch (err) {
+            console.error("Error al graficar:", err);
+        }
+    }
+</script>
+
+</body>
+</html>
