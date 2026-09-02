@@ -30,9 +30,9 @@ jobs:
         if [ -f "calc.html" ]; then cp calc.html www/index.html; fi
         npm init -y
         npm install @capacitor/core @capacitor/cli @capacitor/android
-        npx cap init "Calculadora CAS" "com.uagrm.cas" --web-dir "www"
-        npx cap add android || true
-        npx cap sync android
+        npx @capacitor/cli init "Calculadora CAS" "com.uagrm.cas" --web-dir "www"
+        npx @capacitor/cli add android || true
+        npx @capacitor/cli sync android
 
     - name: Compilar APK con Gradle
       run: |
